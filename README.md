@@ -1,34 +1,62 @@
 # Easy Dataset Station
 
-YOLO 数据集管理桌面工具 — 与 Easy Infer Station 同架构的系列工具之一。
+<p align="center">
+  <b>YOLO 数据集全流程管理桌面工具</b><br>
+  基于 Tauri 2 + React + Flask 构建，支持 Windows / macOS / Linux
+</p>
 
-## 功能
+<p align="center">
+  <a href="https://github.com/MWang-TS/easy-dataset/releases"><img src="https://img.shields.io/github/v/release/MWang-TS/easy-dataset" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platform">
+  <img src="https://img.shields.io/badge/i18n-中文%20%7C%20English%20%7C%20日本語-green" alt="i18n">
+</p>
 
-| 模块 | 功能 |
+---
+
+## 功能模块
+
+| 模块 | 说明 |
 |---|---|
-| 数据集质量检测 | 统计图片/标签/标注框数量，发现孤立文件、空标签、类别分布 |
-| 数据集可视化 | 带标注框预览，支持过滤"已标注/未标注" |
-| 格式转换 | LabelMe → YOLO、VOC → YOLO、YOLO → VOC、类别 ID 重映射 |
-| 标签编辑 | 批量替换/删除类别 ID，多 ID 重排序 |
-| 文件管理 | 一致性检查、删除空标签、创建空标签、批量重命名、修复损坏图片 |
-| 数据集划分 | 按比例 train/val/test 随机划分，自动生成 data.yaml |
+| 🔍 数据集质量检测 | 统计图片 / 标签 / 标注框数量，检测孤立文件、空标签、类别分布失衡 |
+| 👁 数据集可视化 | 带标注框图片预览，支持按"已标注 / 未标注"过滤 |
+| 🔄 格式转换 | LabelMe → YOLO、VOC → YOLO、YOLO → VOC、类别 ID 重映射 |
+| ✏️ 标签编辑 | 批量替换 / 删除类别 ID，多 ID 重排序 |
+| 📁 文件管理 | 一致性检查、删除空标签、创建空标签、批量重命名、修复损坏图片 |
+| ✂️ 数据集划分 | 按比例 train / val / test 随机划分，自动生成 data.yaml |
+| 🗂 数据集合并 | 多路径数据集合并，支持类别 ID 重映射 |
+| 📦 数据集导出 | 一键打包导出为 ZIP，可选择导出子集 |
+| 🎬 视频帧提取 | 从视频中均匀 / 关键帧提取图片，直接进入标注流程 |
+| 🔁 数据增强 | 翻转、旋转、亮度 / 对比度、噪声等多种增强策略，实时预览 |
 
 ## 技术栈
 
-- **桌面壳**：Tauri 2（Rust）
-- **前端**：React 19 + TypeScript + Tailwind CSS v4 + Vite 7
-- **后端**：Python Flask 3.0（运行在 conda 环境中）
-- **端口**：后端 8081，Vite 开发服务器 1421
+| 层次 | 技术 |
+|---|---|
+| 桌面壳 | Tauri 2（Rust）|
+| 前端 | React 19 + TypeScript + Tailwind CSS v4 + Vite 7 |
+| 状态管理 | Zustand 5 |
+| 国际化 | i18next（中文 / English / 日本語）|
+| 后端 | Python Flask（运行在用户指定的 conda 环境中）|
+| 通信 | Tauri IPC（命令）+ REST API（localhost）|
 
 ## 快速开始
 
-### 前提条件
+### 直接下载（推荐）
+
+前往 [Releases](https://github.com/MWang-TS/easy-dataset/releases) 下载对应平台的安装包。
+
+首次运行会引导你选择包含所需 Python 包的 conda 环境，或手动指定 Python 可执行文件路径。
+
+### 从源码构建
+
+**前提条件**
 
 - [Node.js](https://nodejs.org/) 20+
 - [Rust](https://rustup.rs/) 1.77+
-- [Conda](https://docs.conda.io/) 并有包含 Flask 的 Python 环境
+- [Conda](https://docs.conda.io/)（可选，用于管理 Python 环境）
 
-### 安装依赖
+**安装依赖**
 
 ```bash
 # 前端依赖
@@ -38,13 +66,13 @@ npm install
 pip install -r requirements.txt
 ```
 
-### 开发模式
+**开发模式**
 
 ```bash
 npm run tauri dev
 ```
 
-### 构建
+**生产构建**
 
 ```bash
 npm run tauri build
@@ -54,33 +82,31 @@ npm run tauri build
 
 ```
 easy_dataset/
-├── app.py               # Flask 入口
-├── config.py            # 配置（端口、目录）
-├── requirements.txt     # Python 依赖
-├── .env.example         # 环境变量模板
-├── routes/              # Flask Blueprint
-├── services/            # 业务逻辑
-│   ├── dataset_service.py
-│   ├── convert_service.py
-│   ├── label_service.py
-│   ├── file_service.py
-│   └── split_service.py
-├── src/                 # React 前端
-│   ├── pages/
-│   │   ├── DatasetQuality.tsx
-│   │   ├── DatasetViewer.tsx
-│   │   ├── Converter.tsx
-│   │   ├── LabelEditor.tsx
-│   │   ├── FileManager.tsx
-│   │   └── DatasetSplit.tsx
-│   ├── components/
-│   │   └── ResultBox.tsx
+├── app.py                    # Flask 入口
+├── config.py                 # 配置（端口、目录）
+├── requirements.txt          # Python 依赖
+├── routes/                   # Flask Blueprint 路由
+├── services/                 # 业务逻辑层
+│   ├── dataset_service.py    # 质量检测
+│   ├── convert_service.py    # 格式转换
+│   ├── label_service.py      # 标签编辑
+│   ├── file_service.py       # 文件管理
+│   ├── split_service.py      # 数据集划分
+│   ├── merge_service.py      # 数据集合并
+│   ├── export_service.py     # 数据集导出
+│   └── augment_service.py    # 数据增强
+├── src/                      # React 前端
+│   ├── pages/                # 页面组件
+│   ├── components/           # 公共组件
+│   ├── i18n/                 # 国际化（zh-CN / en / ja）
 │   └── lib/
-│       ├── store.ts        # Zustand 状态管理
-│       └── tauri-bridge.ts # Tauri IPC + API 封装
-├── src-tauri/           # Tauri Rust 壳
+│       ├── store.ts          # Zustand 全局状态
+│       └── tauri-bridge.ts   # Tauri IPC + API 封装
+├── src-tauri/                # Tauri Rust 壳
+│   └── src/commands/
+│       └── backend.rs        # 后端进程管理命令
 └── docs/
-    └── PRD.md           # 产品需求文档
+    └── PRD.md                # 产品需求文档
 ```
 
 ## 产品文档
@@ -89,4 +115,4 @@ easy_dataset/
 
 ## License
 
-MIT
+本项目以 [GNU General Public License v3.0](LICENSE) 发布。
