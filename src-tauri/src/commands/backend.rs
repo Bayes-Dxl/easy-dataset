@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::process::Child;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -267,6 +267,36 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
 #[tauri::command]
 pub fn get_backend_client_config(app_dir: String) -> BackendClientConfig {
     BackendClientConfig { api_token: read_backend_env_value(&app_dir, "API_TOKEN") }
+}
+
+#[cfg(not(debug_assertions))]
+fn sync_backend_runtime_dir(
+    resource_dir: &std::path::Path,
+    runtime_dir: &std::path::Path,
+) -> Result<(), String> {
+    std::fs::create_dir_all(runtime_dir)
+        .map_err(|e| format!("创建运行时目录失败: {}", e))?;
+    copy_dir_recursive(resource_dir, runtime_dir)
+        .map_err(|e| format!("同步后端文件失败: {}", e))
+}
+
+#[cfg(not(debug_assertions))]
+fn copy_dir_recursive(
+    src: &std::path::Path,
+    dst: &std::path::Path,
+) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let dest_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dest_path)?;
+        } else {
+            std::fs::copy(entry.path(), &dest_path)?;
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
