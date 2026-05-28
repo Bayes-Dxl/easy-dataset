@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Node.js / Frontend
+node_modules/
+
+# Tauri build artifacts
+src-tauri/target/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# Uploads and generated previews
+uploads/*
+!uploads/.gitkeep
+static/previews/*
+!static/previews/.gitkeep
+
+# Logs
+*.log
+logs/*
+!logs/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db

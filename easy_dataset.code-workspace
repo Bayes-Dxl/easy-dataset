@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"chat.tools.terminal.autoApprove": {
+			"/^node node_modules\\\\typescript\\\\bin\\\\tsc --noEmit 2>&1$/": {
+				"approve": true,
+				"matchCommandLine": true
+			}
+		}
+	}
+}

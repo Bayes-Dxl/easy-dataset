@@ -1,0 +1,170 @@
+import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { DEFAULT_BACKEND_PORT, useAppStore } from "@/lib/store";
+
+export interface CondaEnv {
+  name: string;
+  path: string;
+  python_version: string;
+  missing_packages: string[];
+  is_valid: boolean;
+}
+
+export interface BackendStatus {
+  running: boolean;
+  healthy: boolean;
+  message: string;
+}
+
+// ── 文件/目录对话框 ──
+
+export async function browseDirectory(defaultPath?: string): Promise<string | null> {
+  const result = await open({ directory: true, multiple: false, defaultPath });
+  return typeof result === "string" ? result : null;
+}
+
+export async function browseFile(
+  filters: { name: string; extensions: string[] }[],
+  defaultPath?: string
+): Promise<string | null> {
+  const result = await open({ multiple: false, filters, defaultPath });
+  return typeof result === "string" ? result : null;
+}
+
+export async function browseSaveFile(
+  filters: { name: string; extensions: string[] }[],
+  defaultPath?: string
+): Promise<string | null> {
+  const result = await save({ filters, defaultPath });
+  return typeof result === "string" ? result : null;
+}
+
+export async function writeTextFile(path: string, content: string): Promise<void> {
+  return invoke("write_text_file", { path, content });
+}
+
+// ── Conda / Backend ──
+
+export async function listCondaEnvs(): Promise<CondaEnv[]> {
+  return invoke<CondaEnv[]>("list_conda_envs");
+}
+
+export async function startBackend(
+  pythonExe: string,
+  appDir: string,
+  port: number
+): Promise<void> {
+  return invoke("start_backend", { pythonExe, appDir, port });
+}
+
+export async function stopBackend(): Promise<void> {
+  return invoke("stop_backend");
+}
+
+export async function backendHealth(port: number): Promise<BackendStatus> {
+  return invoke<BackendStatus>("backend_health", { port });
+}
+
+export async function checkBackendAlive(port: number): Promise<boolean> {
+  return invoke<boolean>("check_backend_alive", { port });
+}
+
+export async function getBackendLog(): Promise<string> {
+  return invoke<string>("get_backend_log");
+}
+
+export async function getAppDir(): Promise<string> {
+  return invoke<string>("get_app_dir");
+}
+
+// ── API 调用（直接 fetch，Tauri 和 Web 均可用）──
+
+function getBackendBase(): string {
+  const port = useAppStore.getState().config?.port ?? DEFAULT_BACKEND_PORT;
+  return `http://127.0.0.1:${port}`;
+}
+
+// API Token 缓存：从 Tauri 后端读取一次，后续请求复用
+// undefined = 尚未读取；null = 无 token（未配置或 Web 模式）
+let _apiToken: string | null | undefined = undefined;
+
+async function resolveApiToken(): Promise<string | null> {
+  if (_apiToken !== undefined) return _apiToken;
+  try {
+    const appDir = await getAppDir();
+    const cfg = await invoke<{ api_token: string | null }>(
+      "get_backend_client_config",
+      { appDir }
+    );
+    _apiToken = cfg.api_token || null;
+  } catch {
+    // Web 模式或 Tauri 命令不可用时降级为无 token
+    _apiToken = null;
+  }
+  return _apiToken;
+}
+
+async function apiPost<T = unknown>(path: string, body: unknown): Promise<T> {
+  const token = await resolveApiToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["X-API-Token"] = token;
+  const res = await fetch(`${getBackendBase()}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+export const api = {
+  analyzeDataset: (params: { image_dir?: string; label_dir?: string; yaml_path?: string }) =>
+    apiPost("/api/dataset/analyze", params),
+  parseYaml: (params: { yaml_path: string }) =>
+    apiPost("/api/dataset/parse-yaml", params),
+  listImages: (params: {
+      image_dir: string;
+      label_dir?: string;
+      filter?: 'all' | 'with_label' | 'no_label';
+      class_filter?: number;
+      page?: number;
+      page_size?: number;
+    }) =>
+    apiPost("/api/dataset/list-images", params),
+  previewImage: (params: { image_path: string; label_path?: string; class_names?: string[] }) =>
+    apiPost("/api/dataset/preview", params),
+
+  convertLabelme2yolo: (params: object) => apiPost("/api/convert/labelme2yolo", params),
+  convertVoc2yolo: (params: object) => apiPost("/api/convert/voc2yolo", params),
+  convertYolo2voc: (params: object) => apiPost("/api/convert/yolo2voc", params),
+  convertYoloClassRemap: (params: object) => apiPost("/api/convert/yolo-class-remap", params),
+
+  labelChangeClass: (params: object) => apiPost("/api/label/change-class", params),
+  labelDeleteClass: (params: object) => apiPost("/api/label/delete-class", params),
+  labelReorder: (params: object) => apiPost("/api/label/reorder", params),
+
+  fileCheckConsistency: (params: object) => apiPost("/api/file/check-consistency", params),
+  fileDeleteEmptyLabels: (params: object) => apiPost("/api/file/delete-empty-labels", params),
+  fileCreateEmptyLabels: (params: object) => apiPost("/api/file/create-empty-labels", params),
+  fileBatchRename: (params: object) => apiPost("/api/file/batch-rename", params),
+  fileRepairImages: (params: object) => apiPost("/api/file/repair-images", params),
+
+  splitRun: (params: object) => apiPost("/api/split/run", params),
+
+  // Phase 3: v0.2.0 功能
+  bboxHistogram: (params: { label_dir: string }) =>
+    apiPost("/api/dataset/bbox-histogram", params),
+  exportCoco: (params: { image_dir: string; label_dir: string; output_path: string; class_names?: string[] }) =>
+    apiPost("/api/export/coco", params),
+  mergeDatasets: (params: object) => apiPost("/api/merge/run", params),
+  augmentPreview: (params: { image_path: string; label_path?: string; augments?: string[]; class_names?: string[] }) =>
+    apiPost("/api/augment/preview", params),
+  thumbnails: (params: { paths: string[]; size?: number }) =>
+    apiPost("/api/dataset/thumbnails", params),
+
+  // 视频抽帧
+  videoInfo: (params: { video_path: string }) =>
+    apiPost("/api/video/info", params),
+  videoExtractFrames: (params: { video_path: string; output_dir: string; interval_frames?: number; format?: string; quality?: number; prefix?: string }) =>
+    apiPost("/api/video/extract-frames", params),
+};
