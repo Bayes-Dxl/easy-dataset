@@ -315,10 +315,26 @@ pub fn get_app_dir(app: tauri::AppHandle) -> Result<String, String> {
     {
         let resource_dir = app.path().resource_dir()
             .map_err(|e| format!("找不到资源目录: {}", e))?;
+
+        // Tauri v2 在不同平台/安装方式下，资源可能直接位于 resource_dir，
+        // 也可能位于 resource_dir/resources 子目录（NSIS 安装包常见情况）。
+        // 依次尝试，找到包含 app.py 的那个目录。
+        let src_dir = if resource_dir.join("app.py").exists() {
+            resource_dir.clone()
+        } else if resource_dir.join("resources").join("app.py").exists() {
+            resource_dir.join("resources")
+        } else {
+            return Err(format!(
+                "在资源目录中找不到 app.py。\n已检查路径:\n  {}\n  {}",
+                resource_dir.display(),
+                resource_dir.join("resources").display()
+            ));
+        };
+
         let runtime_dir = app.path().app_local_data_dir()
             .map_err(|e| format!("找不到本地数据目录: {}", e))?
             .join("backend_runtime");
-        sync_backend_runtime_dir(&resource_dir, &runtime_dir)?;
+        sync_backend_runtime_dir(&src_dir, &runtime_dir)?;
         Ok(runtime_dir.to_string_lossy().to_string())
     }
 }
