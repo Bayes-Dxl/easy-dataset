@@ -316,20 +316,26 @@ pub fn get_app_dir(app: tauri::AppHandle) -> Result<String, String> {
         let resource_dir = app.path().resource_dir()
             .map_err(|e| format!("找不到资源目录: {}", e))?;
 
-        // Tauri v2 在不同平台/安装方式下，资源可能直接位于 resource_dir，
-        // 也可能位于 resource_dir/resources 子目录（NSIS 安装包常见情况）。
-        // 依次尝试，找到包含 app.py 的那个目录。
-        let src_dir = if resource_dir.join("app.py").exists() {
-            resource_dir.clone()
-        } else if resource_dir.join("resources").join("app.py").exists() {
-            resource_dir.join("resources")
-        } else {
-            return Err(format!(
-                "在资源目录中找不到 app.py。\n已检查路径:\n  {}\n  {}",
-                resource_dir.display(),
-                resource_dir.join("resources").display()
-            ));
-        };
+        // Tauri v2 NSIS 打包时，"../xxx" 资源路径会转换为 resources/_up_/xxx，
+        // 因为 tauri.conf.json 里的资源均为 "../app.py" 等形式（相对 src-tauri 往上）。
+        // 依次尝试所有可能位置，找到包含 app.py 的目录。
+        let candidates = [
+            resource_dir.join("resources").join("_up_"),  // NSIS 标准布局（../ → _up_）
+            resource_dir.join("resources"),               // 不含 ../ 的资源路径
+            resource_dir.clone(),                         // 直接在资源目录根
+        ];
+        let src_dir = candidates.iter()
+            .find(|p| p.join("app.py").exists())
+            .cloned()
+            .ok_or_else(|| {
+                let checked: Vec<String> = candidates.iter()
+                    .map(|p| format!("  {}", p.display()))
+                    .collect();
+                format!(
+                    "在资源目录中找不到 app.py。\n已检查路径:\n{}",
+                    checked.join("\n")
+                )
+            })?;
 
         let runtime_dir = app.path().app_local_data_dir()
             .map_err(|e| format!("找不到本地数据目录: {}", e))?
