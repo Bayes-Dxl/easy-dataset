@@ -16,8 +16,9 @@
 name: Sync Release to R2
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -34,6 +35,15 @@ jobs:
 
     steps:
       # ── 1. 下载本次 Release 的全部产物 ──────────────────────────────
+      # workflow_run 触发时只同步成功的构建
+      - name: Check workflow result
+        if: github.event_name == 'workflow_run'
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Upstream workflow did not succeed (conclusion: ${{ github.event.workflow_run.conclusion }}), skipping sync."
+            exit 1
+          fi
+
       - name: Resolve release tag
         id: tag
         env:
@@ -43,8 +53,6 @@ jobs:
           INPUT_TAG="${{ github.event.inputs.tag }}"
           if [ -n "$INPUT_TAG" ]; then
             echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          elif [ -n "${{ github.event.release.tag_name }}" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
           else
             LATEST=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
             echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
