@@ -299,6 +299,42 @@ fn copy_dir_recursive(
     Ok(())
 }
 
+/// 从 exe 所在目录出发，BFS 搜索同时含有 app.py + config.py 的目录（最深 6 层）。
+/// 这样不管 NSIS 把资源放在哪个子目录，都能自动找到。
+#[cfg(not(debug_assertions))]
+fn find_backend_src_dir() -> Result<std::path::PathBuf, String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| format!("获取程序路径失败: {}", e))?;
+    let exe_dir = exe_path.parent()
+        .ok_or_else(|| "无法获取程序目录".to_string())?
+        .to_path_buf();
+
+    let mut queue: std::collections::VecDeque<(std::path::PathBuf, usize)> =
+        std::collections::VecDeque::new();
+    queue.push_back((exe_dir.clone(), 0));
+
+    while let Some((dir, depth)) = queue.pop_front() {
+        // 同时检查 app.py 和 config.py，避免误匹配无关目录
+        if dir.join("app.py").exists() && dir.join("config.py").exists() {
+            return Ok(dir);
+        }
+        if depth < 6 {
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                        queue.push_back((entry.path(), depth + 1));
+                    }
+                }
+            }
+        }
+    }
+
+    Err(format!(
+        "在安装目录中找不到后端文件（app.py + config.py）。\n已从以下目录递归搜索 6 层：\n  {}",
+        exe_dir.display()
+    ))
+}
+
 #[tauri::command]
 #[allow(unused_variables)]
 pub fn get_app_dir(app: tauri::AppHandle) -> Result<String, String> {
@@ -313,29 +349,7 @@ pub fn get_app_dir(app: tauri::AppHandle) -> Result<String, String> {
     }
     #[cfg(not(debug_assertions))]
     {
-        let resource_dir = app.path().resource_dir()
-            .map_err(|e| format!("找不到资源目录: {}", e))?;
-
-        // Tauri v2 NSIS 打包时，"../xxx" 资源路径会转换为 resources/_up_/xxx，
-        // 因为 tauri.conf.json 里的资源均为 "../app.py" 等形式（相对 src-tauri 往上）。
-        // 依次尝试所有可能位置，找到包含 app.py 的目录。
-        let candidates = [
-            resource_dir.join("resources").join("_up_"),  // NSIS 标准布局（../ → _up_）
-            resource_dir.join("resources"),               // 不含 ../ 的资源路径
-            resource_dir.clone(),                         // 直接在资源目录根
-        ];
-        let src_dir = candidates.iter()
-            .find(|p| p.join("app.py").exists())
-            .cloned()
-            .ok_or_else(|| {
-                let checked: Vec<String> = candidates.iter()
-                    .map(|p| format!("  {}", p.display()))
-                    .collect();
-                format!(
-                    "在资源目录中找不到 app.py。\n已检查路径:\n{}",
-                    checked.join("\n")
-                )
-            })?;
+        let src_dir = find_backend_src_dir()?;
 
         let runtime_dir = app.path().app_local_data_dir()
             .map_err(|e| format!("找不到本地数据目录: {}", e))?
@@ -343,4 +357,18 @@ pub fn get_app_dir(app: tauri::AppHandle) -> Result<String, String> {
         sync_backend_runtime_dir(&src_dir, &runtime_dir)?;
         Ok(runtime_dir.to_string_lossy().to_string())
     }
+}
+
+// ─── 通用 HTTP GET（版本检查等）──────────────────────────────
+
+/// 抓取指定 URL 的响应文本，用于前端版本检查（绕过 CORS 限制）
+#[tauri::command]
+pub async fn fetch_text(url: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent("Mozilla/5.0 (compatible; easy-dataset-version-check/1.0)")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    resp.text().await.map_err(|e| e.to_string())
 }

@@ -405,6 +405,15 @@
     "infoEstimated": "Estimated",
     "infoUnit": "frames"
   },
+  "update": {
+    "checkFailed": "Update check failed",
+    "newVersion": "New version found: {{version}}",
+    "currentVersion": "Current version: {{version}}",
+    "later": "Later",
+    "download": "Download",
+    "upToDate": "You are up to date",
+    "upToDateDesc": "You are already on {{version}}, the latest version."
+  },
   "coffee": {
     "title": "Buy Me a Coffee",
     "subtitle": "If Easy Dataset helps you, please buy the author a coffee 🙏",

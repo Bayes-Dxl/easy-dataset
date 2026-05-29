@@ -3,7 +3,7 @@ import {
   BarChart2, Eye, RefreshCw, Layers, FolderCog, Scissors,
   Settings, Play, Square, Cpu, CircleHelp,
   GitMerge, Film, Minus, Maximize2, X as XIcon,
-  Coffee, Sun, Moon, Globe, Check,
+  Coffee, Sun, Moon, Globe, Check, ArrowDownToLine, CheckCircle2,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { DEFAULT_BACKEND_PORT, useAppStore } from "@/lib/store";
 import { useTranslation } from "react-i18next";
 import { setLocale, LOCALE_LABELS, type Locale } from "@/i18n/index";
-import { startBackend, stopBackend, checkBackendAlive, listCondaEnvs, getAppDir, type CondaEnv } from "@/lib/tauri-bridge";
+import { startBackend, stopBackend, checkBackendAlive, listCondaEnvs, getAppDir, checkForUpdates, type CondaEnv, type UpdateInfo } from "@/lib/tauri-bridge";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { SidebarPortalCtx } from "@/lib/sidebar-context";
 
 // ── 页面组件（懒加载占位，正式实现在各自文件中）──
@@ -98,11 +99,45 @@ export default function MainPage() {
   const [langOpen, setLangOpen] = useState(false);
   const handleSetLocale = (locale: Locale) => { setLocale(locale); setLangOpen(false); };
 
+  // ── 检查更新弹窗 ──
+  const [checking, setChecking] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
+
   // ── 系统设置弹窗 ──
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'env' | 'about'>('env');
   const [appVersion, setAppVersion] = useState("0.0.1");
   useEffect(() => { getVersion().then(setAppVersion).catch(() => {}); }, []);
+
+  // 启动 5 秒后静默检测新版本
+  useEffect(() => {
+    if (appVersion === "0.0.1") return; // 等版本号加载完再检测
+    const timer = setTimeout(async () => {
+      try {
+        const info = await checkForUpdates(appVersion);
+        if (info.has_update) setUpdateInfo(info);
+      } catch { /* 静默忽略 */ }
+    }, 5000);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appVersion]);
+
+  const handleCheckUpdate = useCallback(async () => {
+    setChecking(true);
+    setUpdateError(null);
+    setUpdateInfo(null);
+    try {
+      const info = await checkForUpdates(appVersion);
+      setUpdateInfo(info);
+    } catch (e) {
+      setUpdateError(String(e));
+    } finally {
+      setChecking(false);
+      setUpdateOpen(true);
+    }
+  }, [appVersion]);
   const [envList, setEnvList] = useState<CondaEnv[]>([]);
   const [envScanning, setEnvScanning] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -266,6 +301,16 @@ export default function MainPage() {
           <Cpu className="w-3 h-3" style={{ color: "white" }} />
         </div>
         <span className="text-xs" style={{ color: "hsl(var(--muted-foreground))" }}>Easy Dataset</span>
+        {updateInfo?.has_update && (
+          <button
+            onClick={() => setUpdateOpen(true)}
+            className="text-xs px-1.5 py-0.5 rounded font-medium animate-pulse"
+            style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
+            title={`v${updateInfo.latest_version} 可用`}
+          >
+            ↑ v{updateInfo.latest_version}
+          </button>
+        )}
         <div className="flex-1" />
         <div className="flex items-center ml-2 gap-0.5">
           <button
@@ -320,11 +365,13 @@ export default function MainPage() {
             <Coffee className="w-3.5 h-3.5" />
           </button>
           <button
+            onClick={handleCheckUpdate}
+            disabled={checking}
             className="w-8 h-7 flex items-center justify-center rounded"
             style={{ color: 'hsl(var(--muted-foreground))' }}
             title={t('common.checkUpdate')}
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <ArrowDownToLine className={cn("w-3.5 h-3.5", checking && "animate-bounce")} />
           </button>
           <button
             onClick={() => { setSettingsOpen(true); scanEnvs(); }}
@@ -479,6 +526,101 @@ export default function MainPage() {
         <div className="flex-1" />
         <span style={{ color: "hsl(var(--border))" }}>v{appVersion}</span>
       </div>
+      {/* ── 检查更新弹窗 ── */}
+      {updateOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setUpdateOpen(false); }}
+        >
+          <div
+            className="relative w-[480px] max-w-[90vw] rounded-xl shadow-2xl p-6"
+            style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setUpdateOpen(false)}
+              className="absolute top-3 right-3 p-1 rounded-md hover:opacity-70 transition-opacity"
+              style={{ color: 'hsl(var(--muted-foreground))' }}
+            >
+              <XIcon className="w-4 h-4" />
+            </button>
+
+            {updateError ? (
+              <>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="font-semibold text-sm" style={{ color: 'hsl(var(--foreground))' }}>
+                    {t('update.checkFailed')}
+                  </span>
+                </div>
+                <p className="text-xs rounded-md p-3" style={{ background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))' }}>
+                  {updateError}
+                </p>
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={() => setUpdateOpen(false)}
+                    className="px-4 py-1.5 rounded-md text-sm transition-opacity hover:opacity-80"
+                    style={{ background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))' }}
+                  >
+                    {t('common.close')}
+                  </button>
+                </div>
+              </>
+            ) : updateInfo?.has_update ? (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <ArrowDownToLine className="w-5 h-5" style={{ color: 'hsl(var(--primary))' }} />
+                  <span className="font-semibold text-base" style={{ color: 'hsl(var(--foreground))' }}>
+                    {t('update.newVersion', { version: `v${updateInfo.latest_version}` })}
+                  </span>
+                </div>
+                <p className="text-xs mb-4" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                  {t('update.currentVersion', { version: `v${updateInfo.current_version}` })}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => setUpdateOpen(false)}
+                    className="px-4 py-1.5 rounded-md text-sm transition-opacity hover:opacity-80"
+                    style={{ background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))' }}
+                  >
+                    {t('update.later')}
+                  </button>
+                  <button
+                    onClick={() => { openUrl(updateInfo.release_url).catch(() => {}); }}
+                    className="px-4 py-1.5 rounded-md text-sm font-medium transition-opacity hover:opacity-80 flex items-center gap-1.5"
+                    style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+                  >
+                    <ArrowDownToLine className="w-3.5 h-3.5" />
+                    {t('update.download')}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="w-5 h-5" style={{ color: 'hsl(var(--success))' }} />
+                  <span className="font-semibold text-base" style={{ color: 'hsl(var(--foreground))' }}>
+                    {t('update.upToDate')}
+                  </span>
+                </div>
+                <p className="text-sm mb-4" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                  {t('update.upToDateDesc', { version: `v${updateInfo?.current_version}` })}
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => setUpdateOpen(false)}
+                    className="px-4 py-1.5 rounded-md text-sm transition-opacity hover:opacity-80"
+                    style={{ background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))' }}
+                  >
+                    {t('common.close')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Buy Me a Coffee 弹窗 ── */}
       {coffeeOpen && (
         <div

@@ -22,6 +22,7 @@ pub fn run() {
             backend::get_backend_client_config,
             backend::get_app_dir,
             backend::write_text_file,
+            backend::fetch_text,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

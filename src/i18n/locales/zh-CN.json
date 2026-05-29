@@ -403,6 +403,15 @@
     "infoEstimated": "预计抽取",
     "infoUnit": "张"
   },
+  "update": {
+    "checkFailed": "检查更新失败",
+    "newVersion": "发现新版本 {{version}}",
+    "currentVersion": "当前版本：{{version}}",
+    "later": "稍后再说",
+    "download": "前往下载",
+    "upToDate": "已是最新版本",
+    "upToDateDesc": "当前版本 {{version}} 已是最新，无需更新。"
+  },
   "coffee": {
     "title": "Buy Me a Coffee",
     "subtitle": "如果 Easy Dataset 对你有帮助，请作者喝杯咖啡 🙏",

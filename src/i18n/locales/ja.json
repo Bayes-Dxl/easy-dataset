@@ -405,6 +405,15 @@
     "infoEstimated": "推定枚数",
     "infoUnit": "枚"
   },
+  "update": {
+    "checkFailed": "更新の確認に失敗しました",
+    "newVersion": "新しいバージョンが見つかりました: {{version}}",
+    "currentVersion": "現在のバージョン: {{version}}",
+    "later": "後で",
+    "download": "ダウンロード",
+    "upToDate": "最新バージョンです",
+    "upToDateDesc": "現在のバージョン {{version}} は最新です。"
+  },
   "coffee": {
     "title": "Buy Me a Coffee",
     "subtitle": "Easy Datasetがお役に立てたら、作者にコーヒーを一杯 🙏",
