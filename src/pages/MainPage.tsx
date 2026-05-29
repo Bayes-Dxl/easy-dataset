@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { DEFAULT_BACKEND_PORT, useAppStore } from "@/lib/store";
 import { useTranslation } from "react-i18next";
 import { setLocale, LOCALE_LABELS, type Locale } from "@/i18n/index";
-import { startBackend, stopBackend, checkBackendAlive, listCondaEnvs, type CondaEnv } from "@/lib/tauri-bridge";
+import { startBackend, stopBackend, checkBackendAlive, listCondaEnvs, getAppDir, type CondaEnv } from "@/lib/tauri-bridge";
 import { SidebarPortalCtx } from "@/lib/sidebar-context";
 
 // ── 页面组件（懒加载占位，正式实现在各自文件中）──
@@ -86,7 +86,7 @@ function ActivityRail({
 
 export default function MainPage() {
   const { t, i18n } = useTranslation();
-  const { config, activePage, backendStatus, backendMessage, setActivePage, setBackendStatus, reset } = useAppStore();
+  const { config, activePage, backendStatus, backendMessage, setActivePage, setBackendStatus, setConfig, reset } = useAppStore();
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [sidebarEl, setSidebarEl] = useState<HTMLElement | null>(null);
   useEffect(() => { setSidebarEl(sidebarRef.current); }, []);
@@ -158,13 +158,19 @@ export default function MainPage() {
     }
     setBackendStatus("starting", "正在启动...");
     try {
+      // 若持久化的 appDir 为空（旧配置 bug），实时获取并更新
+      let resolvedAppDir = config.appDir;
+      if (!resolvedAppDir) {
+        resolvedAppDir = await getAppDir();
+        setConfig({ ...config, appDir: resolvedAppDir });
+      }
       // 如果 BackendState 里存有已退出的旧子进程，先清理再启动
-      try { await startBackend(config.pythonExe, config.appDir, config.port); }
+      try { await startBackend(config.pythonExe, resolvedAppDir, config.port); }
       catch (e) {
         if (String(e).includes("后端已在运行")) {
           // 旧子进程可能已死，停掉后重试
           try { await stopBackend(); } catch (_) {}
-          await startBackend(config.pythonExe, config.appDir, config.port);
+          await startBackend(config.pythonExe, resolvedAppDir, config.port);
         } else {
           throw e;
         }
